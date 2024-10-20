@@ -2,10 +2,15 @@ import ctypes
 from fastapi import FastAPI, WebSocket
 import asyncio
 import psutil
-import os
+import json
+from ctypes.util import find_library
 
-# Load the shared library (assuming it's installed in a standard location)
-robotcontrol_lib = ctypes.CDLL("librobotcontrol.so")
+# Attempt to find and load the shared library
+lib_path = find_library("robotcontrol")
+if lib_path is None:
+    print("Error: librobotcontrol.so not found")
+    exit(1)
+robotcontrol_lib = ctypes.CDLL(lib_path)
 
 # Initialize robot control
 if robotcontrol_lib.rc_initialize() != 0:
@@ -23,22 +28,98 @@ class IMUData(ctypes.Structure):
 
 imu_data = IMUData()
 
-# Motor control and encoder reading functions
-def get_encoder(channel):
-    return robotcontrol_lib.rc_encoder_read(channel)
+# FastAPI setup
+app = FastAPI()
 
-def set_motor(channel, speed):
-    robotcontrol_lib.rc_motor_set(channel, ctypes.c_float(speed))
+# Motor control function
+def set_motor(motor_id, speed):
+    if robotcontrol_lib.rc_motor_set(motor_id, ctypes.c_float(speed)) != 0:
+        print(f"Error: Failed to set motor {motor_id} speed")
 
-# Servo control function (default speed example)
+# WebSocket handler for motor control
+@app.websocket("/ws/motors")
+async def motors_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_json()
+            # Control all four motors, assuming keys are 'motor_1', 'motor_2', etc.
+            for i in range(1, 5):
+                set_motor(i, data.get(f"motor_{i}", 0.0))
+            await websocket.send_text("Motor speeds updated")
+    except Exception as e:
+        print(f"Error in motor WebSocket control: {e}")
+
+# Servo control function (example usage)
 def set_servo(channel, position):
     robotcontrol_lib.rc_servo_send_pulse_us(channel, ctypes.c_int(position))
 
-# Battery monitoring function
-def get_battery_voltage():
-    return robotcontrol_lib.rc_battery_voltage()
+# Function to read IMU data with error checking
+def read_imu_data():
+    if robotcontrol_lib.rc_imu_read(ctypes.byref(imu_data)) != 0:
+        print("Error: Failed to read IMU data")
+        return None
+    else:
+        return {
+            "gyro": list(imu_data.gyro),
+            "accel": list(imu_data.accel),
+            "mag": list(imu_data.mag),
+            "temp": imu_data.temp
+        }
 
-# CPU, Memory, and Network monitoring
+# WebSocket endpoint for IMU data
+@app.websocket("/ws/imu")
+async def imu_data_stream(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            imu_data_read = read_imu_data()
+            if imu_data_read:
+                await websocket.send_json(imu_data_read)
+            await asyncio.sleep(0.1)  # Send updates every 100ms
+    except Exception as e:
+        print(f"Error in IMU WebSocket stream: {e}")
+
+# Function to get encoder data (dummy implementation)
+def get_encoder(encoder_id):
+    # Assuming rc_encoder_read exists in the library
+    encoder_value = robotcontrol_lib.rc_encoder_read(encoder_id)
+    if encoder_value == -1:
+        print(f"Error: Failed to read encoder {encoder_id}")
+    return encoder_value
+
+# WebSocket endpoint for encoder data
+@app.websocket("/ws/encoder")
+async def encoder_data_stream(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            enc_data = {f"encoder_{i}": get_encoder(i) for i in range(1, 5)}
+            await websocket.send_json(enc_data)
+            await asyncio.sleep(0.1)  # Send updates every 100ms
+    except Exception as e:
+        print(f"Error in encoder WebSocket stream: {e}")
+
+# Function to get battery voltage
+def get_battery_voltage():
+    voltage = robotcontrol_lib.rc_battery_voltage()
+    if voltage == -1:
+        print("Error: Failed to read battery voltage")
+    return voltage
+
+# WebSocket endpoint for battery monitoring
+@app.websocket("/ws/battery")
+async def battery_monitoring(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            voltage = get_battery_voltage()
+            await websocket.send_json({"voltage": voltage})
+            await asyncio.sleep(1)  # Send updates every 1s
+    except Exception as e:
+        print(f"Error in battery WebSocket stream: {e}")
+
+# CPU, Memory, and Network monitoring function
 def get_system_metrics():
     cpu_usage = psutil.cpu_percent(interval=1)
     memory_info = psutil.virtual_memory()
@@ -57,66 +138,7 @@ def get_system_metrics():
         }
     }
 
-# FastAPI and WebSocket setup
-app = FastAPI()
-
-# WebSocket endpoint for IMU data
-@app.websocket("/ws/imu")
-async def imu_data_stream(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        while True:
-            robotcontrol_lib.rc_imu_read(ctypes.byref(imu_data))
-            data = {
-                "gyro": list(imu_data.gyro),
-                "accel": list(imu_data.accel),
-                "mag": list(imu_data.mag),
-                "temp": imu_data.temp,
-            }
-            await websocket.send_json(data)
-            await asyncio.sleep(0.1)  # Send updates every 100ms
-    except Exception as e:
-        print(f"Error in IMU WebSocket stream: {e}")
-
-# WebSocket endpoint for encoder data
-@app.websocket("/ws/encoder")
-async def encoder_data_stream(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        while True:
-            enc_data = {f"encoder_{i}": get_encoder(i) for i in range(1, 5)}
-            await websocket.send_json(enc_data)
-            await asyncio.sleep(0.1)  # Send updates every 100ms
-    except Exception as e:
-        print(f"Error in encoder WebSocket stream: {e}")
-
-# WebSocket endpoint for motor control
-@app.websocket("/ws/motor")
-async def motor_control(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        while True:
-            data = await websocket.receive_json()
-            # Control all four motors, assuming keys are 'motor_1', 'motor_2', etc.
-            for i in range(1, 5):
-                set_motor(i, data.get(f"motor_{i}", 0.0))
-            await websocket.send_text("Motor speeds updated")
-    except Exception as e:
-        print(f"Error in motor WebSocket control: {e}")
-
-# WebSocket endpoint for battery monitoring
-@app.websocket("/ws/battery")
-async def battery_monitoring(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        while True:
-            voltage = get_battery_voltage()
-            await websocket.send_json({"voltage": voltage})
-            await asyncio.sleep(1)  # Send updates every 1s
-    except Exception as e:
-        print(f"Error in battery WebSocket stream: {e}")
-
-# WebSocket endpoint for system metrics (CPU, Memory, Network)
+# WebSocket endpoint for system metrics
 @app.websocket("/ws/system_metrics")
 async def system_metrics_stream(websocket: WebSocket):
     await websocket.accept()
