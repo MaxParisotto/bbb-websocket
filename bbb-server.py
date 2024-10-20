@@ -80,15 +80,17 @@ async def imu_data_stream(websocket: WebSocket):
     except Exception as e:
         print(f"Error in IMU WebSocket stream: {e}")
 
-# Function to get encoder data (dummy implementation)
+# Function to get encoder data using real library call
 def get_encoder(encoder_id):
-    # Assuming rc_encoder_read exists in the library
-    encoder_value = robotcontrol_lib.rc_encoder_read(encoder_id)
+    # Call the actual encoder reading function from the library
+    # Assuming encoder_id ranges from 1 to 4 based on your motor setup
+    encoder_value = robotcontrol_lib.rc_encoder_read(ctypes.c_int(encoder_id))
     if encoder_value == -1:
         print(f"Error: Failed to read encoder {encoder_id}")
+        return None
     return encoder_value
 
-# WebSocket endpoint for encoder data
+# Example usage in WebSocket endpoint
 @app.websocket("/ws/encoder")
 async def encoder_data_stream(websocket: WebSocket):
     await websocket.accept()
