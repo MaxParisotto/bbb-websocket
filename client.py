@@ -7,13 +7,10 @@ import time
 
 # Azure REST endpoint (replace with your actual endpoint)
 AZURE_REST_API_URL = "https://bbb-telemetry-apim.azure-api.net/api/processTelemetry"
-# Optional: Azure API key if required
-AZURE_API_KEY = "your-azure-api-key"
 
-# Headers including the Azure API key for authentication
+# Headers without an API key
 headers = {
-    "Content-Type": "application/json",
-    "Ocp-Apim-Subscription-Key": AZURE_API_KEY  # Change if using another header
+    "Content-Type": "application/json"
 }
 
 async def collect_data_from_bbb():
