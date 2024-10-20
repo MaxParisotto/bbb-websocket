@@ -4,15 +4,15 @@ FROM python:3.9-slim
 # Set the working directory inside the container
 WORKDIR /app
 
-# Copy requirements.txt (if you have one) and install dependencies
+# Copy requirements.txt and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code into the container
 COPY . .
 
-# Expose the port that FastAPI will run on
+# Expose the port that the FastAPI server would run on (optional, if needed for client)
 EXPOSE 8001
 
-# Command to run the FastAPI server
-CMD ["uvicorn", "beaglebone_server:app", "--host", "0.0.0.0", "--port", "8001"]
+# Command to run the client script
+CMD ["python3", "client.py"]

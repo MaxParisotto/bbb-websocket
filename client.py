@@ -5,10 +5,10 @@ import json
 import requests
 
 # Azure REST endpoint (or use Azure IoT SDK as needed)
-AZURE_REST_API_URL = "https://192.168.2.241"
+AZURE_REST_API_URL = "https://bbb-telemetry-apim.azure-api.net/processTelemetry"
 
 async def collect_data_from_bbb():
-    uri = "ws:///192.168.2.241:8001/ws/data"
+    uri = "ws://192.168.2.241:8001/ws/data"
     async with websockets.connect(uri) as websocket:
         while True:
             try:

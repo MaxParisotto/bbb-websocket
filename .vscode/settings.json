@@ -1,0 +1,8 @@
+{
+    "azureAutomation.directory.basePath": "",
+    "AREPL.pythonOptions": [
+
+        "-u"
+    ],
+    "dependi.python.informPatchUpdates": true
+}
