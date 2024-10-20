@@ -16,6 +16,11 @@ robotcontrol_lib = ctypes.CDLL(lib_path)
 if robotcontrol_lib.rc_initialize() != 0:
     print("Error: Failed to initialize robot control")
     exit(1)
+    
+# Initialize PRU for encoders (after initializing robot control)
+if robotcontrol_lib.rc_encoder_pru_init() != 0:
+    print("Error: Failed to initialize PRU for encoders")
+    exit(1)
 
 # IMU data structure
 class IMUData(ctypes.Structure):
