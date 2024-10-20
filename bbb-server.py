@@ -3,6 +3,7 @@ from fastapi import FastAPI, WebSocket
 import asyncio
 import psutil
 import json
+import os
 from ctypes.util import find_library
 
 # Attempt to find and load the shared library
@@ -12,12 +13,17 @@ if lib_path is None:
     exit(1)
 robotcontrol_lib = ctypes.CDLL(lib_path)
 
+# Check for root privileges
+if os.geteuid() != 0:
+    print("Error: You need to run this script as root (use sudo).")
+    exit(1)
+
 # Initialize robot control
 if robotcontrol_lib.rc_initialize() != 0:
     print("Error: Failed to initialize robot control")
     exit(1)
-    
-# Initialize PRU for encoders (after initializing robot control)
+
+# Initialize PRU for encoders
 if robotcontrol_lib.rc_encoder_pru_init() != 0:
     print("Error: Failed to initialize PRU for encoders")
     exit(1)
@@ -48,7 +54,6 @@ async def motors_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_json()
-            # Control all four motors, assuming keys are 'motor_1', 'motor_2', etc.
             for i in range(1, 5):
                 set_motor(i, data.get(f"motor_{i}", 0.0))
             await websocket.send_text("Motor speeds updated")
@@ -81,21 +86,19 @@ async def imu_data_stream(websocket: WebSocket):
             imu_data_read = read_imu_data()
             if imu_data_read:
                 await websocket.send_json(imu_data_read)
-            await asyncio.sleep(0.1)  # Send updates every 100ms
+            await asyncio.sleep(0.1)
     except Exception as e:
         print(f"Error in IMU WebSocket stream: {e}")
 
 # Function to get encoder data using real library call
 def get_encoder(encoder_id):
-    # Call the actual encoder reading function from the library
-    # Assuming encoder_id ranges from 1 to 4 based on your motor setup
     encoder_value = robotcontrol_lib.rc_encoder_read(ctypes.c_int(encoder_id))
     if encoder_value == -1:
         print(f"Error: Failed to read encoder {encoder_id}")
         return None
     return encoder_value
 
-# Example usage in WebSocket endpoint
+# WebSocket endpoint for encoder data
 @app.websocket("/ws/encoder")
 async def encoder_data_stream(websocket: WebSocket):
     await websocket.accept()
@@ -103,7 +106,7 @@ async def encoder_data_stream(websocket: WebSocket):
         while True:
             enc_data = {f"encoder_{i}": get_encoder(i) for i in range(1, 5)}
             await websocket.send_json(enc_data)
-            await asyncio.sleep(0.1)  # Send updates every 100ms
+            await asyncio.sleep(0.1)
     except Exception as e:
         print(f"Error in encoder WebSocket stream: {e}")
 
@@ -122,7 +125,7 @@ async def battery_monitoring(websocket: WebSocket):
         while True:
             voltage = get_battery_voltage()
             await websocket.send_json({"voltage": voltage})
-            await asyncio.sleep(1)  # Send updates every 1s
+            await asyncio.sleep(1)
     except Exception as e:
         print(f"Error in battery WebSocket stream: {e}")
 
@@ -153,7 +156,7 @@ async def system_metrics_stream(websocket: WebSocket):
         while True:
             sys_metrics = get_system_metrics()
             await websocket.send_json(sys_metrics)
-            await asyncio.sleep(1)  # Send updates every 1s
+            await asyncio.sleep(1)
     except Exception as e:
         print(f"Error in system metrics WebSocket stream: {e}")
 
@@ -164,12 +167,19 @@ async def servo_control(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_json()
-            # Control all servos, assuming keys are 'servo_1', 'servo_2', etc.
-            for i in range(1, 9):  # Example with 8 servo channels
-                set_servo(i, data.get(f"servo_{i}", 1500))  # Default position: 1500 us pulse width
+            for i in range(1, 9):
+                set_servo(i, data.get(f"servo_{i}", 1500))
             await websocket.send_text("Servo positions updated")
     except Exception as e:
         print(f"Error in servo WebSocket control: {e}")
+
+# Define the cleanup function
+def cleanup():
+    print("Cleaning up resources...")
+    robotcontrol_lib.rc_cleanup()
+
+import atexit
+atexit.register(cleanup)
 
 # Start the server
 if __name__ == "__main__":
