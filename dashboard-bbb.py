@@ -304,6 +304,21 @@ DASHBOARD_HTML = """
         
         .btn-emergency:hover { background: #cc0000; }
         
+        .btn-speed {
+            background: #4ecdc4;
+            color: #1a1a2e;
+            min-width: 80px;
+        }
+        
+        .btn-speed.low {
+            background: #4ecdc4;
+        }
+        
+        .btn-speed.high {
+            background: #e94560;
+            color: white;
+        }
+        
         .telemetry-grid {
             display: grid;
             gap: 1rem;
@@ -374,6 +389,7 @@ DASHBOARD_HTML = """
                     </div>
                 </div>
                 <div class="button-row">
+                    <button class="btn-speed low" id="speedBtn" onclick="toggleSpeed()">🐢 Low</button>
                     <button class="btn-stop" onclick="stopMotors()">Stop</button>
                     <button class="btn-emergency" onclick="emergencyStop()">🛑 EMERGENCY STOP</button>
                 </div>
@@ -473,6 +489,27 @@ DASHBOARD_HTML = """
         let moveX = 0, moveY = 0, rotate = 0;
         const KEEPALIVE_INTERVAL = 100;
         let keepaliveTimer = null;
+        
+        // Speed mode: 'low' = 30%, 'high' = 100%
+        let speedMode = 'low';
+        let speedMultiplier = 0.3;
+        
+        function toggleSpeed() {
+            const btn = document.getElementById('speedBtn');
+            if (speedMode === 'low') {
+                speedMode = 'high';
+                speedMultiplier = 1.0;
+                btn.textContent = '🐇 High';
+                btn.classList.remove('low');
+                btn.classList.add('high');
+            } else {
+                speedMode = 'low';
+                speedMultiplier = 0.3;
+                btn.textContent = '🐢 Low';
+                btn.classList.remove('high');
+                btn.classList.add('low');
+            }
+        }
         
         // Connect to telemetry
         function connectTelemetry() {
@@ -632,9 +669,9 @@ DASHBOARD_HTML = """
             if (controlWs && controlWsReady) {
                 const cmd = {
                     type: 'mecanum',
-                    vx: moveY,
-                    vy: moveX,
-                    omega: rotate
+                    vx: moveY * speedMultiplier,
+                    vy: moveX * speedMultiplier,
+                    omega: rotate * speedMultiplier
                 };
                 controlWs.send(JSON.stringify(cmd));
             }
