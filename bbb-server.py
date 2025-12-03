@@ -149,7 +149,7 @@ class RobotControlLib:
     def _setup_function_signatures(self):
         """Define proper return types and argument types for safety"""
         # Motor functions
-        self._lib.rc_motor_set.argtypes = [ctypes.c_int, ctypes.c_float]
+        self._lib.rc_motor_set.argtypes = [ctypes.c_int, ctypes.c_double]
         self._lib.rc_motor_set.restype = ctypes.c_int
         
         self._lib.rc_motor_free_spin.argtypes = [ctypes.c_int]
@@ -176,7 +176,7 @@ class RobotControlLib:
         self._lib.rc_adc_init.restype = ctypes.c_int
         
         self._lib.rc_adc_batt.argtypes = []
-        self._lib.rc_adc_batt.restype = ctypes.c_float
+        self._lib.rc_adc_batt.restype = ctypes.c_double
         
         self._lib.rc_adc_cleanup.argtypes = []
         self._lib.rc_adc_cleanup.restype = ctypes.c_int
@@ -237,7 +237,7 @@ class RobotControlLib:
     def set_motor(self, motor_id: int, speed: float) -> bool:
         # Clamp speed to safe range
         speed = max(-config.max_motor_speed, min(config.max_motor_speed, speed))
-        result = self._lib.rc_motor_set(motor_id, ctypes.c_float(speed))
+        result = self._lib.rc_motor_set(motor_id, ctypes.c_double(speed))
         if result != 0:
             logger.error(f"rc_motor_set({motor_id}, {speed:.3f}) failed with code {result}")
         return result == 0
@@ -440,10 +440,10 @@ class MecanumKinematics:
         
         fl = vx + vy + omega  # Motor 1 - Front Left
         fr = vx - vy - omega  # Motor 2 - Front Right
-        bl = vx - vy + omega  # Motor 3 - Back Left
-        br = vx + vy - omega  # Motor 4 - Back Right
+        rr = vx + vy - omega  # Motor 3 - Rear Right
+        rl = vx - vy + omega  # Motor 4 - Rear Left
         
-        speeds = {1: fl, 2: fr, 3: bl, 4: br}
+        speeds = {1: fl, 2: fr, 3: rr, 4: rl}
         
         # Normalize if any speed exceeds 1.0
         max_speed = max(abs(s) for s in speeds.values())
@@ -686,7 +686,9 @@ async def control_endpoint(websocket: WebSocket):
                 vx = data.get("vx", 0.0)
                 vy = data.get("vy", 0.0)
                 omega = data.get("omega", 0.0)
+                logger.info(f"Received mecanum command: vx={vx}, vy={vy}, omega={omega}")
                 speeds = MecanumKinematics.compute_wheel_speeds(vx, vy, omega)
+                logger.info(f"Computed wheel speeds: {speeds}")
                 success = await motor_controller.set_all_motors(speeds)
                 await websocket.send_json({
                     "type": "mecanum_response",

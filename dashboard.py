@@ -1187,11 +1187,12 @@ DASHBOARD_HTML = """
             el.className = 'imu-bar-fill' + (value < 0 ? ' negative' : '');
         }
         
-        // Joystick handling
+        // Joystick handling - use global tracker to prevent cross-talk
+        let activeJoystick = null;
+        
         function setupJoystick(containerId, knobId, onMove) {
             const container = document.getElementById(containerId);
             const knob = document.getElementById(knobId);
-            let active = false;
             
             const getPosition = (e) => {
                 const rect = container.getBoundingClientRect();
@@ -1221,18 +1222,17 @@ DASHBOARD_HTML = """
             };
             
             const updateKnob = (x, y) => {
-                const rect = container.getBoundingClientRect();
                 knob.style.left = (50 + x * 40) + '%';
                 knob.style.top = (50 + y * 40) + '%';
             };
             
             const start = (e) => {
-                active = true;
+                activeJoystick = containerId;  // Track which joystick is active
                 e.preventDefault();
             };
             
             const move = (e) => {
-                if (!active) return;
+                if (activeJoystick !== containerId) return;  // Only respond if THIS joystick is active
                 e.preventDefault();
                 const pos = getPosition(e);
                 updateKnob(pos.x, pos.y);
@@ -1240,9 +1240,11 @@ DASHBOARD_HTML = """
             };
             
             const end = () => {
-                active = false;
-                updateKnob(0, 0);
-                onMove(0, 0);
+                if (activeJoystick === containerId) {
+                    activeJoystick = null;
+                    updateKnob(0, 0);
+                    onMove(0, 0);
+                }
             };
             
             container.addEventListener('mousedown', start);
@@ -1256,20 +1258,20 @@ DASHBOARD_HTML = """
         setupJoystick('moveJoystick', 'moveKnob', (x, y) => {
             moveX = x;
             moveY = -y;  // Invert Y
-            console.log('Move joystick:', {x: moveX, y: moveY});
+            console.log('[Move joystick] moveX:', moveX, 'moveY:', moveY);
             sendControl();
         });
         
         setupJoystick('rotateJoystick', 'rotateKnob', (x, y) => {
             rotate = x;
-            console.log('Rotate joystick:', rotate);
+            console.log('[Rotate joystick] rotate:', rotate, 'moveX:', moveX, 'moveY:', moveY);
             sendControl();
         });
         
         function sendControl() {
             // Always send if there's movement, rate limit only applies to keepalive
             const hasMovement = moveX !== 0 || moveY !== 0 || rotate !== 0;
-            
+
             // Send via persistent WebSocket
             if (controlWs && controlWsReady) {
                 const cmd = {
@@ -1278,12 +1280,12 @@ DASHBOARD_HTML = """
                     vy: moveX,
                     omega: rotate
                 };
-                console.log('Sending:', cmd);
+                console.log('[sendControl] Sending command:', JSON.stringify(cmd));
                 controlWs.send(JSON.stringify(cmd));
             } else {
-                console.log('WebSocket not ready:', {ws: !!controlWs, ready: controlWsReady});
+                console.log('[sendControl] WebSocket not ready:', {ws: !!controlWs, ready: controlWsReady});
             }
-            
+
             // Restart keepalive timer if there's any movement
             if (hasMovement) {
                 if (keepaliveTimer) clearTimeout(keepaliveTimer);
