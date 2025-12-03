@@ -495,13 +495,25 @@ async def _update_cpu_percent():
             None, lambda: psutil.cpu_percent(interval=1)
         )
 
+def get_cpu_temp() -> Optional[float]:
+    """Get CPU temperature from thermal zone"""
+    try:
+        with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+            temp = int(f.read().strip()) / 1000.0
+            return temp
+    except:
+        return None
+
 def get_system_metrics() -> Dict[str, Any]:
     """Get system metrics without blocking"""
     memory_info = psutil.virtual_memory()
     net_info = psutil.net_if_addrs()
+    cpu_temp = get_cpu_temp()
     
     return {
-        "cpu_usage": _cached_cpu_percent,
+        "cpu_percent": _cached_cpu_percent,
+        "memory_percent": memory_info.percent,
+        "cpu_temp": cpu_temp,
         "memory": {
             "total": memory_info.total,
             "available": memory_info.available,

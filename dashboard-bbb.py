@@ -555,12 +555,19 @@ DASHBOARD_HTML = """
         
         function updateTelemetry(data) {
             if (data.imu) {
-                document.getElementById('accelX').textContent = (data.imu.accel_x || 0).toFixed(2);
-                document.getElementById('accelY').textContent = (data.imu.accel_y || 0).toFixed(2);
-                document.getElementById('accelZ').textContent = (data.imu.accel_z || 0).toFixed(2);
-                document.getElementById('gyroX').textContent = (data.imu.gyro_x || 0).toFixed(2);
-                document.getElementById('gyroY').textContent = (data.imu.gyro_y || 0).toFixed(2);
-                document.getElementById('gyroZ').textContent = (data.imu.gyro_z || 0).toFixed(2);
+                // Handle both nested {accel: {x, y, z}} and flat {accel_x, accel_y, accel_z} formats
+                const ax = data.imu.accel?.x ?? data.imu.accel_x ?? 0;
+                const ay = data.imu.accel?.y ?? data.imu.accel_y ?? 0;
+                const az = data.imu.accel?.z ?? data.imu.accel_z ?? 0;
+                const gx = data.imu.gyro?.x ?? data.imu.gyro_x ?? 0;
+                const gy = data.imu.gyro?.y ?? data.imu.gyro_y ?? 0;
+                const gz = data.imu.gyro?.z ?? data.imu.gyro_z ?? 0;
+                document.getElementById('accelX').textContent = ax.toFixed(2);
+                document.getElementById('accelY').textContent = ay.toFixed(2);
+                document.getElementById('accelZ').textContent = az.toFixed(2);
+                document.getElementById('gyroX').textContent = gx.toFixed(2);
+                document.getElementById('gyroY').textContent = gy.toFixed(2);
+                document.getElementById('gyroZ').textContent = gz.toFixed(2);
             }
             
             if (data.battery) {
@@ -576,12 +583,13 @@ DASHBOARD_HTML = """
             }
             
             if (data.system) {
-                document.getElementById('cpuUsage').textContent = 
-                    (data.system.cpu_percent || 0).toFixed(1) + '%';
-                document.getElementById('memUsage').textContent = 
-                    (data.system.memory_percent || 0).toFixed(1) + '%';
+                const cpuPct = data.system.cpu_percent ?? data.system.cpu_usage ?? 0;
+                const memPct = data.system.memory_percent ?? data.system.memory?.percent ?? 0;
+                const cpuTemp = data.system.cpu_temp;
+                document.getElementById('cpuUsage').textContent = cpuPct.toFixed(1) + '%';
+                document.getElementById('memUsage').textContent = memPct.toFixed(1) + '%';
                 document.getElementById('cpuTemp').textContent = 
-                    (data.system.cpu_temp || 0).toFixed(1) + '°C';
+                    cpuTemp != null ? cpuTemp.toFixed(1) + '°C' : 'N/A';
             }
         }
         
