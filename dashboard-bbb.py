@@ -621,8 +621,8 @@ DASHBOARD_HTML = """
         });
         
         setupJoystick('rotateJoystick', 'rotateKnob', (x, y) => {
-            moveX = x;
-            moveY = -y;
+            moveX = -y;  // 90° clockwise: X becomes -Y
+            moveY = -x;  // 90° clockwise: Y becomes -X
             sendControl();
         });
         
