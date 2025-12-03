@@ -1256,32 +1256,36 @@ DASHBOARD_HTML = """
         setupJoystick('moveJoystick', 'moveKnob', (x, y) => {
             moveX = x;
             moveY = -y;  // Invert Y
+            console.log('Move joystick:', {x: moveX, y: moveY});
             sendControl();
         });
         
         setupJoystick('rotateJoystick', 'rotateKnob', (x, y) => {
             rotate = x;
+            console.log('Rotate joystick:', rotate);
             sendControl();
         });
         
         function sendControl() {
-            // Rate limit sending
-            const now = Date.now();
-            if (now - lastSentTime < SEND_INTERVAL) return;
-            lastSentTime = now;
+            // Always send if there's movement, rate limit only applies to keepalive
+            const hasMovement = moveX !== 0 || moveY !== 0 || rotate !== 0;
             
             // Send via persistent WebSocket
             if (controlWs && controlWsReady) {
-                controlWs.send(JSON.stringify({
+                const cmd = {
                     type: 'mecanum',
                     vx: moveY,
                     vy: moveX,
                     omega: rotate
-                }));
+                };
+                console.log('Sending:', cmd);
+                controlWs.send(JSON.stringify(cmd));
+            } else {
+                console.log('WebSocket not ready:', {ws: !!controlWs, ready: controlWsReady});
             }
             
-            // Start or restart keepalive timer if there's any movement
-            if (moveX !== 0 || moveY !== 0 || rotate !== 0) {
+            // Restart keepalive timer if there's any movement
+            if (hasMovement) {
                 if (keepaliveTimer) clearTimeout(keepaliveTimer);
                 keepaliveTimer = setTimeout(sendControl, KEEPALIVE_INTERVAL);
             } else {
