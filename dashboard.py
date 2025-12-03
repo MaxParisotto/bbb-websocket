@@ -1263,8 +1263,9 @@ DASHBOARD_HTML = """
         });
         
         setupJoystick('rotateJoystick', 'rotateKnob', (x, y) => {
+            // IMPORTANT: Only set rotate, do NOT touch moveX/moveY
             rotate = x;
-            console.log('[Rotate joystick] rotate:', rotate, 'moveX:', moveX, 'moveY:', moveY);
+            console.log('[Rotate joystick] rotate:', rotate, '(moveX/moveY should be 0 if move joystick is centered:', moveX, moveY, ')');
             sendControl();
         });
         
